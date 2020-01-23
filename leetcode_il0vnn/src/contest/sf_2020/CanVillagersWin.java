@@ -25,7 +25,7 @@ public class CanVillagersWin {
 		int killAtNight(int[] credibility, int[] lived, int[] roles, int[] wolfs);// ww
 		// int bearAloud(int[] lived,int[] roles); jurge说的 咆哮
 
-		void morning(int[] credibility, int[] lived, int[] roles); // bear
+		void morning(int[] credibility, int[] lived, int[] roles, int[] wolfs); // bear
 
 		void deadSkill(int[] credibility, int[] lived, int[] roles); // idiot
 																		// hunter
@@ -40,7 +40,8 @@ public class CanVillagersWin {
 
 	public static abstract class Thing implements Sprit {
 		int idx;
-		List<Integer[]> cups = new ArrayList<>();
+		//静态化，共享思想
+		static List<Integer[]> cups = new ArrayList<>();
 
 		public Thing(int idx) {
 			this.idx = idx;
@@ -52,7 +53,7 @@ public class CanVillagersWin {
 		}
 
 		@Override
-		public void morning(int[] credibility, int[] lived, int[] roles) {
+		public void morning(int[] credibility, int[] lived, int[] roles, int[] wolfs) {
 		}
 
 		@Override
@@ -76,21 +77,21 @@ public class CanVillagersWin {
 					}
 				}
 			}
-			System.out.println("Hunter kill " + kill);
+			System.out.println("Hunter or vil vote to low credibility kill " + kill);
 			lived[kill] = DEF_DEAD;
 
-			// 整理cups
-			List<Integer> rms = new ArrayList<>();
-			int i = 0;
-			for (Integer[] cup : cups) {
-				if (cup[0] == kill || cup[1] == kill) {
-					rms.add(i);
-				}
-				i++;
-			}
-			for (int j : rms) {
-				cups.remove(j);
-			}
+//			// 整理cups 这段有问题，一直保留会oom，但是清理逻辑有点复杂
+//			List<Integer> rms = new ArrayList<>();
+//			int i = 0;
+//			for (Integer[] cup : cups) {
+//				if (cup[0] == kill || cup[1] == kill) {
+//					rms.add(i);
+//				}
+//				i++;
+//			}
+//			for (int j : rms) {
+//				cups.remove(j);
+//			}
 
 			return kill;
 		}
@@ -100,7 +101,7 @@ public class CanVillagersWin {
 			credibility[idx] = 100;
 
 			// 猜测铁狼
-			List<Integer> rms = new ArrayList<>();
+  			List<Integer> rms = new ArrayList<>();
 			int i = 0;
 			for (Integer[] cup : cups) {
 				if (cup[0] == idx || cup[1] == idx) {
@@ -133,21 +134,26 @@ public class CanVillagersWin {
 
 		@Override
 		public int killAtNight(int[] credibility, int[] lived, int[] roles, int[] wolfs) {
+			int kill = -1;
+			
 			// 找熊
 			for (int i = 0; i < lived.length; i++) {
 				if (DEF_LIVE == lived[i] && roles[i] == DEF_BEAR) {
-					return i;
+					System.out.println("ww find bear "+i);
+					kill =  i;
+					break;
 				}
 			}
 
-			// 杀高信用村名
-			int kill = -1;
-			int cred = 0;
-			for (int i = 0; i < lived.length; i++) {
-				if (DEF_LIVE == lived[i] && roles[i] == DEF_UNKNOWN && wolfs[i] != DEF_WW) {
-					if (credibility[i] > cred) {
-						cred = credibility[i];
-						kill = i;
+			if(kill <0){
+				// 杀高信用村名
+				int cred = 0;
+				for (int i = 0; i < lived.length; i++) {
+					if (DEF_LIVE == lived[i] && (roles[i] == DEF_UNKNOWN || roles[i] == DEF_GOODMAN) && wolfs[i] != DEF_WW) {
+						if (credibility[i] > cred) {
+							cred = credibility[i];
+							kill = i;
+						}
 					}
 				}
 			}
@@ -169,6 +175,7 @@ public class CanVillagersWin {
 			roles[idx] = DEF_HUNTER;
 			imGood(credibility, lived, roles);
 			;
+			System.out.print("hunter use skill vote -> ");
 			vote(credibility, lived, roles);
 		}
 	}
@@ -184,7 +191,9 @@ public class CanVillagersWin {
 			lived[idx] = DEF_LIVE;
 			// 亮牌
 			roles[idx] = DEF_IDIOT;
+			System.out.println("idiot use skill 'im good'");
 			imGood(credibility, lived, roles);
+			
 		}
 	}
 
@@ -205,6 +214,8 @@ public class CanVillagersWin {
 
 		private void updateCache(int[] credibility, int[] lived, int[] roles) {
 			if (cached[0][0] >= 0) {
+				System.out.println("update cred --> "+cached[0][0]+" to "+cached[0][1]+" is "+cached[0][2]+" ; "
+						+cached[1][0]+" to "+cached[1][1]+" is "+cached[1][2]);
 				// 之前的咆哮可以发出去了
 				credibility[cached[0][0]] = cached[0][1];
 				credibility[cached[1][0]] = cached[1][1];
@@ -215,10 +226,11 @@ public class CanVillagersWin {
 
 				cached[0][0] = -1;
 			}
+			
 		}
 
 		@Override
-		public void morning(int[] credibility, int[] lived, int[] roles) {
+		public void morning(int[] credibility, int[] lived, int[] roles , int[] wolfs) {
 
 			int l = idx - 1;
 			int r = idx + 1;
@@ -226,10 +238,12 @@ public class CanVillagersWin {
 			while (lived[(l + DEF_ALL_NUM) % DEF_ALL_NUM] == DEF_DEAD) {
 				l--;
 			}
+			l=(l + DEF_ALL_NUM) % DEF_ALL_NUM;
 
 			while (lived[(r + DEF_ALL_NUM) % DEF_ALL_NUM] == DEF_DEAD) {
 				r++;
 			}
+			r=(r + DEF_ALL_NUM) % DEF_ALL_NUM;
 
 			boolean lGood = isGood(roles[l]);
 			boolean rGood = isGood(roles[r]);
@@ -246,15 +260,24 @@ public class CanVillagersWin {
 				cached[0][1] = 0;
 				cached[0][2] = DEF_WW;
 			} else {
-				// 各少一半
-				cached[0][0] = l;
-				cached[0][1] = credibility[l] == 1 ? 1 : credibility[l] / 2;
-				cached[0][2] = -1;
-				cached[1][0] = r;
-				cached[1][1] = credibility[r] == 1 ? 1 : credibility[r] / 2;
-				cached[1][2] = -1;
-
-				cups.add(new Integer[] { l, r });
+				//如果不咆哮 铁好人
+				if(wolfs[l] !=DEF_WW && wolfs[r] != DEF_WW){
+					cached[0][1] = 100;
+					cached[0][2] = DEF_GOODMAN;
+					cached[1][1] = 100;
+					cached[1][2] = DEF_GOODMAN;
+				}else{
+					// 各少一半
+					cached[0][0] = l;
+					cached[0][1] = credibility[l] == 1 ? 1 : credibility[l] / 2;
+					cached[0][2] = -1;
+					cached[1][0] = r;
+					cached[1][1] = credibility[r] == 1 ? 1 : credibility[r] / 2;
+					cached[1][2] = -1;
+					
+					//可疑对象
+					cups.add(new Integer[] { l, r });
+				}
 
 			}
 
@@ -282,12 +305,12 @@ public class CanVillagersWin {
 			if (lived[i] == DEF_LIVE) {
 				if (sprits[i] instanceof Ww) {
 					wwnum++;
-				} else if (sprits[i] instanceof Vil) {
+				} else {//if (sprits[i] instanceof Vil) {
 					vvnum++;
 				}
 			}
-		}
-		if (wwnum > vvnum) {
+		}System.out.println("check game ww: "+wwnum+" vil: "+vvnum);
+		if (wwnum >= vvnum) {
 			return DEF_WW_WIN;
 		}
 		if (wwnum == 0)
@@ -334,9 +357,11 @@ public class CanVillagersWin {
 
 		// 游戏开始
 		int rst = -1;
+		int i=1;
 		while (true) {
+			System.out.println("round "+(i++));
 			rst = run(credibility, lived, roles, sprits, wolfs, bear);
-			if (rst != DEF_VIL_WIN) {
+			if (rst != DEF_CONTINUE) {
 				break;
 			}
 		}
@@ -355,8 +380,8 @@ public class CanVillagersWin {
 		}
 
 		// 咆哮
-		if (kill != bear) {
-			sprits[bear].morning(credibility, lived, roles);
+		if ( lived[bear] == DEF_LIVE) {
+			sprits[bear].morning(credibility, lived, roles, wolfs);
 		}
 
 		// 技能
@@ -366,8 +391,15 @@ public class CanVillagersWin {
 		int rst = checkGame(sprits, lived);
 		if (rst != DEF_CONTINUE)
 			return rst;
+		
+		//发言
+		for(int i=0;i<lived.length;i++){
+			if (lived[i] == DEF_LIVE) {
+				sprits[i].speak(credibility, lived, roles);
+			}
+		}
 
-		// 投票
+		// 投票 共享逻辑，一人投票即可
 		int kill2 = -1;
 		for (int i = 0; i < lived.length; i++) {
 			if (lived[i] == DEF_LIVE) {
@@ -381,23 +413,22 @@ public class CanVillagersWin {
 
 		// 检查
 		int rst2 = checkGame(sprits, lived);
-		if (rst2 != DEF_CONTINUE)
-			return rst2;
+		return rst2;
 
-		return DEF_CONTINUE;
 	}
 
 	public static void main(String[] args) {
 		CanVillagersWin m = new CanVillagersWin();
 
-		System.out.println(m.canVillagersWin(
-				new String[] { "bear", "vil", "vil", "ww", "vil", "vil", "idiot", "ww", "hunter", "ww", "ww", "vil" },
-				new int[] { 9, 55, 62, 74, 43, 70, 13, 23, 15, 78, 61, 66 }));
-		
-		System.out.println(m.canVillagersWin(
-				new String[] { "vil", "vil", "vil", "ww", "vil", "ww", "ww", "vil", "ww", "bear", "hunter", "idiot" },
-				new int[] { 81, 71, 88, 31, 34, 40, 70, 94, 73, 79, 98, 48 }));
-		
+		System.out.println("==-==--=begin");
+//		System.out.println(m.canVillagersWin(
+//				new String[] { "bear", "vil", "vil", "ww", "vil", "vil", "idiot", "ww", "hunter", "ww", "ww", "vil" },
+//				new int[] { 9, 55, 62, 74, 43, 70, 13, 23, 15, 78, 61, 66 }));
+		System.out.println("==-==--=begin");		
+//		System.out.println(m.canVillagersWin(
+//				new String[] { "vil", "vil", "vil", "ww", "vil", "ww", "ww", "vil", "ww", "bear", "hunter", "idiot" },
+//				new int[] { 81, 71, 88, 31, 34, 40, 70, 94, 73, 79, 98, 48 }));
+		System.out.println("==-==--=begin");
 		System.out.println(m.canVillagersWin(
 				new String[] { "vil","ww","bear","hunter","ww","idiot","vil","vil","ww","vil","ww","vil"},
 				new int[] {45,67,32,25,1,27,99,85,3,54,3,25 }));
